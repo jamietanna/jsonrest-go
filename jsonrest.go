@@ -38,14 +38,20 @@ func (r *Request) BindBody(val interface{}) error {
 	return nil
 }
 
+// Get returns the meta value for the key.
+func (r *Request) Get(key interface{}) interface{} {
+	val, _ := r.meta.Load(key)
+	return val
+}
+
+// Header retrieves a header value by name.
+func (r *Request) Header(name string) string {
+	return r.req.Header.Get(name)
+}
+
 // Param retrieves a URL parameter value by name.
 func (r *Request) Param(name string) string {
 	return r.params.ByName(name)
-}
-
-// Route returns the route pattern.
-func (r *Request) Route() string {
-	return r.route
 }
 
 // Query retrieves a querystring value by name.
@@ -53,20 +59,19 @@ func (r *Request) Query(name string) string {
 	return r.req.URL.Query().Get(name)
 }
 
+// Route returns the route pattern.
+func (r *Request) Route() string {
+	return r.route
+}
+
 // SetResponseHeader sets a response header.
 func (r *Request) SetResponseHeader(key, val string) {
 	r.responseWriter.Header().Set(key, val)
 }
 
-// Set sets a value for the key.
+// Set sets a meta value for the key.
 func (r *Request) Set(key, val interface{}) {
 	r.meta.Store(key, val)
-}
-
-// Get returns the value for the key.
-func (r *Request) Get(key interface{}) interface{} {
-	val, _ := r.meta.Load(key)
-	return val
 }
 
 // URL returns the URI being requested from the server.

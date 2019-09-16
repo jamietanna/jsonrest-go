@@ -21,15 +21,15 @@ func BadRequest(msg string) error {
 	return Error(http.StatusBadRequest, "bad_request", msg)
 }
 
-// UnauthorizedError returns an HTTP 401 Unauthorized error with a custom error
-// message.
-func UnauthorizedError(msg string) error {
-	return Error(http.StatusUnauthorized, "unauthorized", msg)
-}
-
 // NotFound returns an HTTP 404 Not Found error with a custom error message.
 func NotFound(msg string) error {
 	return Error(http.StatusNotFound, "not_found", msg)
+}
+
+// Unauthorized returns an HTTP 401 Unauthorized error with a custom error
+// message.
+func Unauthorized(msg string) error {
+	return Error(http.StatusUnauthorized, "unauthorized", msg)
 }
 
 // UnprocessableEntity returns an HTTP 422 UnprocessableEntity error with a
