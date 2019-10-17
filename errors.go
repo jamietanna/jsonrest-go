@@ -9,7 +9,7 @@ import (
 
 // Error creates an error that will be rendered directly to the client.
 func Error(status int, code, message string) error {
-	return &httpError{
+	return &HTTPError{
 		Status:  status,
 		Code:    code,
 		Message: message,
@@ -39,14 +39,14 @@ func UnprocessableEntity(msg string) error {
 }
 
 // unknownError is returned for an internal server error.
-var unknownError = &httpError{
+var unknownError = &HTTPError{
 	Code:    "unknown_error",
 	Message: "an unknown error occurred",
 	Status:  500,
 }
 
-// httpError is an error that will be rendered to the client.
-type httpError struct {
+// HTTPError is an error that will be rendered to the client.
+type HTTPError struct {
 	Code    string
 	Message string
 	Details []string
@@ -54,7 +54,7 @@ type httpError struct {
 }
 
 // MarshalJSON implements the json.Marshaler interface.
-func (err *httpError) MarshalJSON() ([]byte, error) {
+func (err *HTTPError) MarshalJSON() ([]byte, error) {
 	var wp struct {
 		Error struct {
 			Code    string   `json:"code"`
@@ -69,14 +69,14 @@ func (err *httpError) MarshalJSON() ([]byte, error) {
 }
 
 // Error implements the error interface.
-func (err *httpError) Error() string {
+func (err *HTTPError) Error() string {
 	return fmt.Sprintf("jsonrest: %v: %v", err.Code, err.Message)
 }
 
-// translateError coerces err into an httpError that can be marshaled directly
+// translateError coerces err into an HTTPError that can be marshaled directly
 // to the client.
-func translateError(err error, dumpInternalError bool) *httpError {
-	httpErr, ok := err.(*httpError)
+func translateError(err error, dumpInternalError bool) *HTTPError {
+	httpErr, ok := err.(*HTTPError)
 	if !ok {
 		httpErr = &(*unknownError) // shallow copy
 		if dumpInternalError {
