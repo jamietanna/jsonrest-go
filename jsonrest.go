@@ -64,6 +64,11 @@ func (r *Request) Route() string {
 	return r.route
 }
 
+// Method returns the http method.
+func (r *Request) Method() string {
+	return r.req.Method
+}
+
 // SetResponseHeader sets a response header.
 func (r *Request) SetResponseHeader(key, val string) {
 	r.responseWriter.Header().Set(key, val)
