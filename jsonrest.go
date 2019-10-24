@@ -64,7 +64,7 @@ func (r *Request) Route() string {
 	return r.route
 }
 
-// Method returns the http method.
+// Method returns the HTTP method.
 func (r *Request) Method() string {
 	return r.req.Method
 }
