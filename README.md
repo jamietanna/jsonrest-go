@@ -1,7 +1,9 @@
 # jsonrest-go
 
-[![CircleCI](https://circleci.com/gh/deliveroo/jsonrest-go.svg?style=svg&circle-token=23dc71c75f9687ac43f71d5292b13a9a7070e7c3)](https://circleci.com/gh/deliveroo/jsonrest-go)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-5272B4.svg)](http://godoc.deliveroo.net/github.com/deliveroo/jsonrest-go)
+[![CircleCI](https://img.shields.io/circleci/build/github/deliveroo/jsonrest-go)](https://circleci.com/gh/deliveroo/jsonrest-go/tree/master)
+[![Go Report Card](https://goreportcard.com/badge/github.com/deliveroo/jsonrest-go)](https://goreportcard.com/report/github.com/deliveroo/jsonrest-go)
+[![GoDoc](https://godoc.org/net/http?status.svg)](https://godoc.org/github.com/deliveroo/jsonrest-go)
+[![go.dev](https://img.shields.io/badge/go.dev-pkg-007d9c.svg?style=flat)](https://pkg.go.dev/github.com/deliveroo/jsonrest-go)
 
 Package jsonrest implements a microframework for writing RESTful web
 applications.
