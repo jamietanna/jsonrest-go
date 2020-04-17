@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"runtime/debug"
@@ -40,6 +41,14 @@ func (r *Request) BindBody(val interface{}) error {
 		return BadRequest(msg).Wrap(err)
 	}
 	return nil
+}
+
+// FormFile returns the first file for the provided form key.
+func (r *Request) FormFile(name string, maxMultipartMemory int64) (multipart.File, *multipart.FileHeader, error) {
+	if err := r.req.ParseMultipartForm(maxMultipartMemory); err != nil {
+		return nil, nil, BadRequest("cannot parse multipart form").Wrap(err)
+	}
+	return r.req.FormFile(name)
 }
 
 // Get returns the meta value for the key.
