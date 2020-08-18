@@ -32,7 +32,7 @@ func main() {
     r.Get("/", hello)
 }
 
-func hello(ctx context.Context, req *jsonrest.Reqeust) (interface{}, error) {
+func hello(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
     return jsonrest.M{"message": "Hello, world"}, nil
 }
 
