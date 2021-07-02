@@ -1,4 +1,4 @@
-package jsonrest_test
+package jsonrest
 
 import (
 	"bytes"
@@ -16,13 +16,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/deliveroo/assert-go"
-	"github.com/deliveroo/jsonrest-go"
 )
 
 func TestSimpleGet(t *testing.T) {
-	r := jsonrest.NewRouter()
-	r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
-		return jsonrest.M{"message": "Hello World"}, nil
+	r := NewRouter()
+	r.Get("/hello", func(ctx context.Context, r *Request) (interface{}, error) {
+		return M{"message": "Hello World"}, nil
 	})
 
 	w := do(r, http.MethodGet, "/hello", nil, "application/json")
@@ -32,8 +31,8 @@ func TestSimpleGet(t *testing.T) {
 }
 
 func TestRequestBody(t *testing.T) {
-	r := jsonrest.NewRouter()
-	r.Post("/users", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+	r := NewRouter()
+	r.Post("/users", func(ctx context.Context, r *Request) (interface{}, error) {
 		var params struct {
 			ID int `json:"id"`
 		}
@@ -42,7 +41,7 @@ func TestRequestBody(t *testing.T) {
 			return nil, err
 		}
 
-		return jsonrest.M{"id": params.ID}, nil
+		return M{"id": params.ID}, nil
 	})
 
 	t.Run("good json", func(t *testing.T) {
@@ -67,14 +66,14 @@ func TestRequestBody(t *testing.T) {
 
 func TestFormFile(t *testing.T) {
 	const defaultMaxMemory = 32 << 20
-	r := jsonrest.NewRouter()
-	r.Post("/file_upload", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+	r := NewRouter()
+	r.Post("/file_upload", func(ctx context.Context, r *Request) (interface{}, error) {
 		f, fh, err := r.FormFile("file", defaultMaxMemory)
 		if err != nil {
 			return nil, err
 		}
 		f.Close()
-		return jsonrest.M{"fileName": fh.Filename}, nil
+		return M{"fileName": fh.Filename}, nil
 	})
 
 	t.Run("good file", func(t *testing.T) {
@@ -101,13 +100,13 @@ func TestFormFile(t *testing.T) {
 }
 
 func TestRequestURLParams(t *testing.T) {
-	r := jsonrest.NewRouter()
-	r.Get("/users/:id", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+	r := NewRouter()
+	r.Get("/users/:id", func(ctx context.Context, r *Request) (interface{}, error) {
 		id := r.Param("id")
 		if id == "" {
 			return nil, errors.New("missing id")
 		}
-		return jsonrest.M{"id": id}, nil
+		return M{"id": id}, nil
 	})
 
 	w := do(r, http.MethodGet, "/users/123", nil, "application/json")
@@ -118,7 +117,7 @@ func TestRequestURLParams(t *testing.T) {
 
 func TestNotFound(t *testing.T) {
 	t.Run("no override", func(t *testing.T) {
-		r := jsonrest.NewRouter()
+		r := NewRouter()
 		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
 
 		assert.Equal(t, w.Result().StatusCode, 404)
@@ -136,7 +135,7 @@ func TestNotFound(t *testing.T) {
 			c.Writer.WriteHeader(http.StatusOK)
 			assert.Must(t, json.NewEncoder(c.Writer).Encode(m{"proxy": true}))
 		}
-		r := jsonrest.NewRouter(jsonrest.WithNotFoundHandler(h))
+		r := NewRouter(WithNotFoundHandler(h))
 		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
 
 		assert.Equal(t, w.Result().StatusCode, 200)
@@ -162,7 +161,7 @@ func TestError(t *testing.T) {
 			},
 		},
 		{
-			jsonrest.Error(404, "customer_not_found", "customer not found"),
+			Error(404, "customer_not_found", "customer not found"),
 			404, m{
 				"error": m{
 					"code":    "customer_not_found",
@@ -174,8 +173,8 @@ func TestError(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
-			r := jsonrest.NewRouter()
-			r.Get("/fail", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			r := NewRouter()
+			r.Get("/fail", func(ctx context.Context, r *Request) (interface{}, error) {
 				return nil, tt.err
 			})
 
@@ -188,9 +187,9 @@ func TestError(t *testing.T) {
 }
 
 func TestDumpInternalError(t *testing.T) {
-	r := jsonrest.NewRouter()
+	r := NewRouter()
 	r.DumpErrors = true
-	r.Get("/", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+	r.Get("/", func(ctx context.Context, r *Request) (interface{}, error) {
 		return nil, errors.New("foo error occurred")
 	})
 
@@ -210,15 +209,15 @@ func TestDumpInternalError(t *testing.T) {
 
 func TestMiddleware(t *testing.T) {
 	t.Run("top level middleware", func(t *testing.T) {
-		r := jsonrest.NewRouter()
+		r := NewRouter()
 		called := false
-		r.Use(func(next jsonrest.Endpoint) jsonrest.Endpoint {
-			return func(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
+		r.Use(func(next Endpoint) Endpoint {
+			return func(ctx context.Context, req *Request) (interface{}, error) {
 				called = true
 				return next(ctx, req)
 			}
 		})
-		r.Get("/test", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
+		r.Get("/test", func(ctx context.Context, req *Request) (interface{}, error) { return nil, nil })
 
 		w := do(r, http.MethodGet, "/test", nil, "application/json")
 
@@ -226,20 +225,20 @@ func TestMiddleware(t *testing.T) {
 		assert.True(t, called)
 	})
 	t.Run("group", func(t *testing.T) {
-		r := jsonrest.NewRouter()
+		r := NewRouter()
 		called := false
 
 		withMiddleware := r.Group()
-		withMiddleware.Use(func(next jsonrest.Endpoint) jsonrest.Endpoint {
-			return func(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
+		withMiddleware.Use(func(next Endpoint) Endpoint {
+			return func(ctx context.Context, req *Request) (interface{}, error) {
 				called = true
 				return next(ctx, req)
 			}
 		})
-		withMiddleware.Get("/withmiddleware", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
+		withMiddleware.Get("/withmiddleware", func(ctx context.Context, req *Request) (interface{}, error) { return nil, nil })
 
 		withoutMiddleware := r.Group()
-		withoutMiddleware.Get("/withoutmiddleware", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
+		withoutMiddleware.Get("/withoutmiddleware", func(ctx context.Context, req *Request) (interface{}, error) { return nil, nil })
 
 		w := do(r, http.MethodGet, "/withmiddleware", nil, "application/json")
 
@@ -255,12 +254,12 @@ func TestMiddleware(t *testing.T) {
 }
 
 func TestSimilarEndpoint(t *testing.T) {
-	r := jsonrest.NewRouter()
-	r.Get("/api/orders/:id", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
-		return jsonrest.M{"message": "Endpoint with id", "param": r.Param("id")}, nil
+	r := NewRouter()
+	r.Get("/api/orders/:id", func(ctx context.Context, r *Request) (interface{}, error) {
+		return M{"message": "Endpoint with id", "param": r.Param("id")}, nil
 	})
-	r.Get("/api/orders/xyz", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
-		return jsonrest.M{"message": "Endpoint without id"}, nil
+	r.Get("/api/orders/xyz", func(ctx context.Context, r *Request) (interface{}, error) {
+		return M{"message": "Endpoint without id"}, nil
 	})
 
 	w := do(r, http.MethodGet, "/api/orders/id-3214-45", nil, "application/json")
