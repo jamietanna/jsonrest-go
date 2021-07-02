@@ -13,6 +13,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/deliveroo/assert-go"
 	"github.com/deliveroo/jsonrest-go"
 )
@@ -24,6 +26,7 @@ func TestSimpleGet(t *testing.T) {
 	})
 
 	w := do(r, http.MethodGet, "/hello", nil, "application/json")
+
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"message": "Hello World"})
 }
@@ -34,20 +37,24 @@ func TestRequestBody(t *testing.T) {
 		var params struct {
 			ID int `json:"id"`
 		}
+
 		if err := r.BindBody(&params); err != nil {
 			return nil, err
 		}
+
 		return jsonrest.M{"id": params.ID}, nil
 	})
 
 	t.Run("good json", func(t *testing.T) {
 		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`), "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{"id": 1})
 	})
 
 	t.Run("bad json", func(t *testing.T) {
 		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`), "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 400)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -104,6 +111,7 @@ func TestRequestURLParams(t *testing.T) {
 	})
 
 	w := do(r, http.MethodGet, "/users/123", nil, "application/json")
+
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"id": "123"})
 }
@@ -112,6 +120,7 @@ func TestNotFound(t *testing.T) {
 	t.Run("no override", func(t *testing.T) {
 		r := jsonrest.NewRouter()
 		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 404)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -122,13 +131,14 @@ func TestNotFound(t *testing.T) {
 	})
 
 	t.Run("with override", func(t *testing.T) {
-		h := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("content-type", "application/json; charset=utf-8")
-			w.WriteHeader(http.StatusOK)
-			assert.Must(t, json.NewEncoder(w).Encode(m{"proxy": true}))
-		})
+		h := func(c *gin.Context) {
+			c.Writer.Header().Set("content-type", "application/json; charset=utf-8")
+			c.Writer.WriteHeader(http.StatusOK)
+			assert.Must(t, json.NewEncoder(c.Writer).Encode(m{"proxy": true}))
+		}
 		r := jsonrest.NewRouter(jsonrest.WithNotFoundHandler(h))
 		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"proxy": true,
@@ -170,6 +180,7 @@ func TestError(t *testing.T) {
 			})
 
 			w := do(r, http.MethodGet, "/fail", nil, "application/json")
+
 			assert.Equal(t, w.Result().StatusCode, tt.wantStatus)
 			assert.JSONEqual(t, w.Body.String(), tt.want)
 		})
@@ -184,6 +195,7 @@ func TestDumpInternalError(t *testing.T) {
 	})
 
 	w := do(r, http.MethodGet, "/", nil, "application/json")
+
 	assert.Equal(t, w.Result().StatusCode, 500)
 	assert.JSONEqual(t, w.Body.String(), m{
 		"error": m{
@@ -209,6 +221,7 @@ func TestMiddleware(t *testing.T) {
 		r.Get("/test", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
 		w := do(r, http.MethodGet, "/test", nil, "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 	})
@@ -229,14 +242,40 @@ func TestMiddleware(t *testing.T) {
 		withoutMiddleware.Get("/withoutmiddleware", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
 		w := do(r, http.MethodGet, "/withmiddleware", nil, "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 
 		called = false
 		w = do(r, http.MethodGet, "/withoutmiddleware", nil, "application/json")
+
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.False(t, called)
 	})
+}
+
+func TestSimilarEndpoint(t *testing.T) {
+	r := jsonrest.NewRouter()
+	r.Get("/api/orders/:id", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+		return jsonrest.M{"message": "Endpoint with id", "param": r.Param("id")}, nil
+	})
+	r.Get("/api/orders/xyz", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+		return jsonrest.M{"message": "Endpoint without id"}, nil
+	})
+
+	w := do(r, http.MethodGet, "/api/orders/id-3214-45", nil, "application/json")
+
+	assert.Equal(t, w.Result().StatusCode, 200)
+	assert.JSONEqual(t, w.Body.String(), m{"message": "Endpoint with id", "param": "id-3214-45"})
+
+	w = do(r, http.MethodGet, "/api/orders/xyz", nil, "application/json")
+
+	assert.Equal(t, w.Result().StatusCode, 200)
+	assert.JSONEqual(t, w.Body.String(), m{"message": "Endpoint without id"})
+
+	w = do(r, http.MethodGet, "/api/order/xyz", nil, "application/json")
+
+	assert.Equal(t, w.Result().StatusCode, 404)
 }
 
 type m map[string]interface{}
@@ -244,7 +283,9 @@ type m map[string]interface{}
 func do(h http.Handler, method, path string, body io.Reader, contentType string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
 	req.Header.Set("Content-Type", contentType)
+
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
+
 	return w
 }
