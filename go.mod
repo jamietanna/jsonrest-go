@@ -1,6 +1,6 @@
 module github.com/deliveroo/jsonrest-go
 
-go 1.12
+go 1.15
 
 require (
 	github.com/deliveroo/assert-go v1.0.3
