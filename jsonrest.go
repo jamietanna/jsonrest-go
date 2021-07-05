@@ -30,9 +30,8 @@ func (r *Request) BasicAuth() (username, password string, ok bool) {
 
 // BindBody unmarshals the request body into the given value.
 func (r *Request) BindBody(val interface{}) error {
-	defer r.context.Request.Body.Close()
-
-	if err := json.NewDecoder(r.context.Request.Body).Decode(val); err != nil {
+	err := r.context.ShouldBind(val)
+	if err != nil {
 		msg := "malformed or unexpected json"
 		if details := jsonErrorDetails(err); details != "" {
 			msg += ": " + details
