@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,6 +18,15 @@ import (
 
 	"github.com/deliveroo/assert-go"
 )
+
+func TestMain(m *testing.M) {
+	// Run gin in test mode to prevent warnings being spewed to the console.
+	gin.SetMode(gin.TestMode)
+
+	exitVal := m.Run()
+
+	os.Exit(exitVal)
+}
 
 func TestSimpleGet(t *testing.T) {
 	r := NewRouter()
