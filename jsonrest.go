@@ -13,24 +13,35 @@ import (
 	"sync"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 )
 
-// A Request represents a RESTful HTTP request received by the server.
+// Param respresents a request parameter
+type Param struct {
+	Key   string
+	Value string
+}
+
+// Request represents a RESTful HTTP request received by the server.
 type Request struct {
-	route   string
-	meta    sync.Map
-	context *gin.Context
+	route       string
+	meta        sync.Map
+	params      []Param
+	httpRequest *http.Request
+	header      http.Header
 }
 
 // BasicAuth returns the username and password, if the request uses HTTP Basic
 // Authentication.
 func (r *Request) BasicAuth() (username, password string, ok bool) {
-	return r.context.Request.BasicAuth()
+	return r.httpRequest.BasicAuth()
 }
 
 // BindBody unmarshals the request body into the given value.
 func (r *Request) BindBody(val interface{}) error {
-	err := r.context.ShouldBind(val)
+	b := binding.Default(r.httpRequest.Method, r.httpRequest.Header.Get("Content-Type"))
+	err := b.Bind(r.httpRequest, val)
+
 	if err != nil {
 		msg := "malformed or unexpected json"
 		if details := jsonErrorDetails(err); details != "" {
@@ -45,11 +56,11 @@ func (r *Request) BindBody(val interface{}) error {
 
 // FormFile returns the first file for the provided form key.
 func (r *Request) FormFile(name string, maxMultipartMemory int64) (multipart.File, *multipart.FileHeader, error) {
-	if err := r.context.Request.ParseMultipartForm(maxMultipartMemory); err != nil {
+	if err := r.httpRequest.ParseMultipartForm(maxMultipartMemory); err != nil {
 		return nil, nil, BadRequest("cannot parse multipart form").Wrap(err)
 	}
 
-	return r.context.Request.FormFile(name)
+	return r.httpRequest.FormFile(name)
 }
 
 // Get returns the meta value for the key.
@@ -60,22 +71,28 @@ func (r *Request) Get(key interface{}) interface{} {
 
 // Header retrieves a header value by name.
 func (r *Request) Header(name string) string {
-	return r.context.Request.Header.Get(name)
+	return r.httpRequest.Header.Get(name)
 }
 
 // Param retrieves a URL parameter value by name.
 func (r *Request) Param(name string) string {
-	return r.context.Param(name)
+	for _, entry := range r.params {
+		if entry.Key == name {
+			return entry.Value
+		}
+	}
+
+	return ""
 }
 
 // Query retrieves a querystring value by name.
 func (r *Request) Query(name string) string {
-	return r.context.Request.URL.Query().Get(name)
+	return r.httpRequest.URL.Query().Get(name)
 }
 
 // Raw returns the underlying *http.Request.
 func (r *Request) Raw() *http.Request {
-	return r.context.Request
+	return r.httpRequest
 }
 
 // Route returns the route pattern.
@@ -85,12 +102,12 @@ func (r *Request) Route() string {
 
 // Method returns the HTTP method.
 func (r *Request) Method() string {
-	return r.context.Request.Method
+	return r.httpRequest.Method
 }
 
 // SetResponseHeader sets a response header.
 func (r *Request) SetResponseHeader(key, val string) {
-	r.context.Writer.Header().Set(key, val)
+	r.header.Set(key, val)
 }
 
 // Set sets a meta value for the key.
@@ -100,7 +117,7 @@ func (r *Request) Set(key, val interface{}) {
 
 // URL returns the URI being requested from the server.
 func (r *Request) URL() *url.URL {
-	return r.context.Request.URL
+	return r.httpRequest.URL
 }
 
 // M is a shorthand for map[string]interface{}. Responses from the server may be
@@ -271,9 +288,17 @@ func endpointToHandler(e Endpoint, path string, r *Router) func(c *gin.Context) 
 			}
 		}()
 
+		params := make([]Param, len(c.Params))
+
+		for index, elem := range c.Params {
+			params[index] = Param{Key: elem.Key, Value: elem.Value}
+		}
+
 		result, err := e(c.Request.Context(), &Request{
-			context: c,
+			httpRequest: c.Request,
+			params: params,
 			route:   path,
+			header: c.Writer.Header(),
 		})
 		if err != nil {
 			httpErr := translateError(err, r.DumpErrors)
