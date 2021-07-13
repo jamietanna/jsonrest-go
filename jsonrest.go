@@ -274,7 +274,7 @@ func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseW
 		})
 		if err != nil {
 			httpErr := translateError(err, r.DumpErrors)
-			sendJSON(w, httpErr.Status, httpErr)
+			sendJSON(w, httpErr.StatusCode(), httpErr)
 			return
 		}
 		sendJSON(w, 200, result)

@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+// httpErrorResponse allows to customize the format of non-200 http responses.
+// If the handler returns an error which implements this interface, it will be marshaled as is and written with the specified status code.
+type httpErrorResponse interface {
+	error
+	StatusCode() int
+}
+
 // Error creates an error that will be rendered directly to the client.
 func Error(status int, code, message string) *HTTPError {
 	return &HTTPError{
@@ -55,6 +62,11 @@ type HTTPError struct {
 	wrapped error
 }
 
+// StatusCode implements the httpErrorResponse interface.
+func (err *HTTPError) StatusCode() int {
+	return err.Status
+}
+
 // MarshalJSON implements the json.Marshaler interface.
 func (err *HTTPError) MarshalJSON() ([]byte, error) {
 	var wp struct {
@@ -92,18 +104,19 @@ func (err *HTTPError) Cause() error {
 	return err.wrapped
 }
 
-// translateError coerces err into an HTTPError that can be marshaled directly
+// translateError coerces err into an httpErrorResponse that can be marshaled directly
 // to the client.
-func translateError(err error, dumpInternalError bool) *HTTPError {
-	httpErr, ok := err.(*HTTPError)
+func translateError(err error, dumpInternalError bool) httpErrorResponse {
+	errResponse, ok := err.(httpErrorResponse)
 	if !ok {
 		e := *unknownError
-		httpErr = &(e) // shallow copy
+		httpErr := &(e) // shallow copy
 		if dumpInternalError {
 			httpErr.Details = dumpError(err)
 		}
+		errResponse = httpErr
 	}
-	return httpErr
+	return errResponse
 }
 
 // dumpError formats the error suitable for viewing in a JSON response for local

@@ -136,6 +136,19 @@ func TestNotFound(t *testing.T) {
 	})
 }
 
+type testError struct {
+	Message string `json:"message"`
+	status  int
+}
+
+func (e *testError) Error() string {
+	return e.Message
+}
+
+func (e *testError) StatusCode() int {
+	return e.status
+}
+
 func TestError(t *testing.T) {
 	tests := []struct {
 		err        error
@@ -159,6 +172,10 @@ func TestError(t *testing.T) {
 					"message": "customer not found",
 				},
 			},
+		},
+		{
+			&testError{Message: "test", status: 444},
+			444, m{"message": "test"},
 		},
 	}
 
