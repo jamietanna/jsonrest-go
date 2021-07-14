@@ -29,7 +29,10 @@ will be rendered in the following form:
 }
 ```
 along with the given HTTP status code.
-If the error returned supports `StatusCode() int` method, it will be marshaled as-is to the client, using standard `json.Marshal()` with the status code provided as well.
+
+If the error returned implements HTTPErrorResponse (i.e. has a `StatusCode()
+int` method), it will be marshaled as-is to the client with the provided status
+code.
 Any other errors will be obfuscated to the caller (unless `router.DumpError` is
 enabled).
 

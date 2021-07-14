@@ -7,9 +7,11 @@ import (
 	"strings"
 )
 
-// httpErrorResponse allows to customize the format of non-200 http responses.
-// If the handler returns an error which implements this interface, it will be marshaled as is and written with the specified status code.
-type httpErrorResponse interface {
+// HTTPErrorResponse allows to customize the format of non-200 http responses.
+// If the handler returns an error which implements this interface, it will
+// be marshaled as-is to the response and written with the specified status
+// code.
+type HTTPErrorResponse interface {
 	error
 	StatusCode() int
 }
@@ -62,7 +64,7 @@ type HTTPError struct {
 	wrapped error
 }
 
-// StatusCode implements the httpErrorResponse interface.
+// StatusCode implements the HTTPErrorResponse interface.
 func (err *HTTPError) StatusCode() int {
 	return err.Status
 }
@@ -104,10 +106,10 @@ func (err *HTTPError) Cause() error {
 	return err.wrapped
 }
 
-// translateError coerces err into an httpErrorResponse that can be marshaled directly
+// translateError coerces err into an HTTPErrorResponse that can be marshaled directly
 // to the client.
-func translateError(err error, dumpInternalError bool) httpErrorResponse {
-	errResponse, ok := err.(httpErrorResponse)
+func translateError(err error, dumpInternalError bool) HTTPErrorResponse {
+	errResponse, ok := err.(HTTPErrorResponse)
 	if !ok {
 		e := *unknownError
 		httpErr := &(e) // shallow copy
