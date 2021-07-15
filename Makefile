@@ -13,12 +13,12 @@ install: ## Install the library.
 
 .PHONY: lint
 lint: ## Lint the project with golangci-lint.
-	@$(GOBIN)/golangci-lint run ./...
+	golangci-lint run ./...
 
 .PHONY: setup
 setup:  ## Download dependencies.
 	@GOBIN=$(GOBIN) go mod download
-	@GOBIN=$(GOBIN) go get github.com/golangci/golangci-lint/cmd/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/v1.18.0/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.18.0
 
 .PHONY: test
 test:  ## Run tests.
