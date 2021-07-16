@@ -57,14 +57,14 @@ jobs:
           path: /tmp/test-results
   release:
     docker:
-      - image: deliveroo/semantic-release:1.0.0
+      - image: deliveroo/semantic-release:latest
         <<: *global_dockerhub_auth
     steps:
       - checkout
       - run: semantic-release -r ${CIRCLE_REPOSITORY_URL}
   commitlint:
     docker:
-      - image: deliveroo/semantic-release:1.0.0
+      - image: deliveroo/semantic-release:latest
         <<: *global_dockerhub_auth
     steps:
       - checkout
