@@ -18,8 +18,8 @@ import (
 // A Request represents a RESTful HTTP request received by the server.
 type Request struct {
 	meta           sync.Map
-	params         httprouter.Params
-	req            *http.Request
+	Params         httprouter.Params
+	Req            *http.Request
 	responseWriter http.ResponseWriter
 	route          string
 }
@@ -27,13 +27,13 @@ type Request struct {
 // BasicAuth returns the username and password, if the request uses HTTP Basic
 // Authentication.
 func (r *Request) BasicAuth() (username, password string, ok bool) {
-	return r.req.BasicAuth()
+	return r.Req.BasicAuth()
 }
 
 // BindBody unmarshals the request body into the given value.
 func (r *Request) BindBody(val interface{}) error {
-	defer r.req.Body.Close()
-	if err := json.NewDecoder(r.req.Body).Decode(val); err != nil {
+	defer r.Req.Body.Close()
+	if err := json.NewDecoder(r.Req.Body).Decode(val); err != nil {
 		msg := "malformed or unexpected json"
 		if details := jsonErrorDetails(err); details != "" {
 			msg += ": " + details
@@ -45,10 +45,10 @@ func (r *Request) BindBody(val interface{}) error {
 
 // FormFile returns the first file for the provided form key.
 func (r *Request) FormFile(name string, maxMultipartMemory int64) (multipart.File, *multipart.FileHeader, error) {
-	if err := r.req.ParseMultipartForm(maxMultipartMemory); err != nil {
+	if err := r.Req.ParseMultipartForm(maxMultipartMemory); err != nil {
 		return nil, nil, BadRequest("cannot parse multipart form").Wrap(err)
 	}
-	return r.req.FormFile(name)
+	return r.Req.FormFile(name)
 }
 
 // Get returns the meta value for the key.
@@ -59,22 +59,22 @@ func (r *Request) Get(key interface{}) interface{} {
 
 // Header retrieves a header value by name.
 func (r *Request) Header(name string) string {
-	return r.req.Header.Get(name)
+	return r.Req.Header.Get(name)
 }
 
 // Param retrieves a URL parameter value by name.
 func (r *Request) Param(name string) string {
-	return r.params.ByName(name)
+	return r.Params.ByName(name)
 }
 
 // Query retrieves a querystring value by name.
 func (r *Request) Query(name string) string {
-	return r.req.URL.Query().Get(name)
+	return r.Req.URL.Query().Get(name)
 }
 
 // Raw returns the underlying *http.Request.
 func (r *Request) Raw() *http.Request {
-	return r.req
+	return r.Req
 }
 
 // Route returns the route pattern.
@@ -84,7 +84,7 @@ func (r *Request) Route() string {
 
 // Method returns the HTTP method.
 func (r *Request) Method() string {
-	return r.req.Method
+	return r.Req.Method
 }
 
 // SetResponseHeader sets a response header.
@@ -99,7 +99,7 @@ func (r *Request) Set(key, val interface{}) {
 
 // URL returns the URI being requested from the server.
 func (r *Request) URL() *url.URL {
-	return r.req.URL
+	return r.Req.URL
 }
 
 // M is a shorthand for map[string]interface{}. Responses from the server may be
@@ -115,12 +115,12 @@ type Endpoint func(ctx context.Context, r *Request) (interface{}, error)
 //
 //     func LoggingMiddleware(logger *logger.Logger) Middleware {
 //         return func(next jsonrest.Endpoint) jsonrest.Endpoint {
-//             return func(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
+//             return func(ctx context.Context, Req *jsonrest.Request) (interface{}, error) {
 //                 start := time.Now()
 //                 defer func() {
-//                     log.Printf("%s (%v)", req.URL.Path, time.Since(start))
+//                     log.Printf("%s (%v)", Req.URL.Path, time.Since(start))
 //                 }()
-//                 return next(ctx, req)
+//                 return next(ctx, Req)
 //             }
 //         }
 //    }
@@ -267,8 +267,8 @@ func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseW
 			}
 		}()
 		result, err := e(req.Context(), &Request{
-			params:         params,
-			req:            req,
+			Params:         params,
+			Req:            req,
 			responseWriter: w,
 			route:          path,
 		})
