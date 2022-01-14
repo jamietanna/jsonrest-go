@@ -102,6 +102,13 @@ func (r *Request) URL() *url.URL {
 	return r.req.URL
 }
 
+// Response is a type that can be returned by the endpoint for setting a custom
+// HTTP success status code with the response body.
+type Response struct {
+	Body       interface{}
+	StatusCode int
+}
+
 // M is a shorthand for map[string]interface{}. Responses from the server may be
 // of this type.
 type M map[string]interface{}
@@ -277,6 +284,12 @@ func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseW
 			sendJSON(w, httpErr.StatusCode(), httpErr)
 			return
 		}
+
+		if res, ok := result.(Response); ok {
+			sendJSON(w, res.StatusCode, res.Body)
+			return
+		}
+
 		sendJSON(w, 200, result)
 	}
 }
@@ -288,6 +301,11 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 	// closes the response early.
 	w.Header().Set("content-type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
+
+	if v == nil {
+		return
+	}
+
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(v); err != nil {

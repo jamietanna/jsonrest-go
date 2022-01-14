@@ -28,6 +28,36 @@ func TestSimpleGet(t *testing.T) {
 	assert.JSONEqual(t, w.Body.String(), m{"message": "Hello World"})
 }
 
+func TestCustomSuccessStatusCode(t *testing.T) {
+	r := jsonrest.NewRouter()
+	r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+
+		return jsonrest.Response{
+			StatusCode: http.StatusNoContent,
+		}, nil
+	})
+
+	r.Get("/bye", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+
+		return jsonrest.Response{
+			StatusCode: http.StatusCreated,
+			Body: struct {
+				Data string `json:"data"`
+			}{
+				Data: "byebye",
+			},
+		}, nil
+	})
+
+	w := do(r, http.MethodGet, "/hello", nil, "application/json")
+	assert.Equal(t, w.Result().StatusCode, http.StatusNoContent)
+	assert.JSONEqual(t, w.Body.String(), "")
+
+	w = do(r, http.MethodGet, "/bye", nil, "application/json")
+	assert.Equal(t, w.Result().StatusCode, http.StatusCreated)
+	assert.JSONEqual(t, w.Body.String(), `{"data":"byebye"}`)
+}
+
 func TestRequestBody(t *testing.T) {
 	r := jsonrest.NewRouter()
 	r.Post("/users", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
