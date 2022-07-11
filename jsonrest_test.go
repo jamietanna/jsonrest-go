@@ -286,6 +286,29 @@ func TestMiddleware(t *testing.T) {
 	})
 }
 
+func TestOptions(t *testing.T) {
+	t.Run("with disabled pretty formatting", func(t *testing.T) {
+		r := jsonrest.NewRouter(jsonrest.WithDisableJSONIndent())
+		r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": "Hello World"}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
+	})
+	t.Run("with enabled pretty formatting", func(t *testing.T) {
+		r := jsonrest.NewRouter()
+		r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": "Hello World"}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Body.String(), "{\n  \"message\": \"Hello World\"\n}\n")
+	})
+}
+
 type m map[string]interface{}
 
 func do(h http.Handler, method, path string, body io.Reader, contentType string) *httptest.ResponseRecorder {

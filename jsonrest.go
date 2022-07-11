@@ -140,6 +140,9 @@ type Router struct {
 	// response; useful for local debugging.
 	DumpErrors bool
 
+	// option to control JSON pretty formatting which can have performance impact
+	disableJSONIndent bool
+
 	// notFound is a configurable http.Handler which is called when no matching
 	// route is found. If it is not set, notFoundHandler is used.
 	notFound http.Handler
@@ -157,6 +160,14 @@ type Option func(*Router)
 func WithNotFoundHandler(h http.Handler) Option {
 	return func(r *Router) {
 		r.notFound = h
+	}
+}
+
+// WithDisableJSONIndent is an Option available for NewRouter to configure JSON responses
+// without indenting
+func WithDisableJSONIndent() Option {
+	return func(r *Router) {
+		r.disableJSONIndent = true
 	}
 }
 
@@ -264,15 +275,16 @@ func applyMiddleware(e Endpoint, r *Router) Endpoint {
 }
 
 // endpointToHandler converts an endpoint to an httprouter.Handle function.
-func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
+func endpointToHandler(e Endpoint, path string, router *Router) func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 	return func(w http.ResponseWriter, req *http.Request, params httprouter.Params) {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Printf("panic serving %v: %+v", req.RequestURI, r)
+				log.Printf("panic serving %v: %+v", req.RequestURI, router)
 				debug.PrintStack()
-				sendJSON(w, 500, unknownError)
+				router.sendJSON(w, 500, unknownError)
 			}
 		}()
+
 		result, err := e(req.Context(), &Request{
 			params:         params,
 			req:            req,
@@ -280,23 +292,23 @@ func endpointToHandler(e Endpoint, path string, r *Router) func(w http.ResponseW
 			route:          path,
 		})
 		if err != nil {
-			httpErr := translateError(err, r.DumpErrors)
-			sendJSON(w, httpErr.StatusCode(), httpErr)
+			httpErr := translateError(err, router.DumpErrors)
+			router.sendJSON(w, httpErr.StatusCode(), httpErr)
 			return
 		}
 
 		if res, ok := result.(Response); ok {
-			sendJSON(w, res.StatusCode, res.Body)
+			router.sendJSON(w, res.StatusCode, res.Body)
 			return
 		}
 
-		sendJSON(w, 200, result)
+		router.sendJSON(w, 200, result)
 	}
 }
 
 // sendJSON encodes v as JSON and writes it to the response body. Panics
 // if an encoding error occurs.
-func sendJSON(w http.ResponseWriter, status int, v interface{}) {
+func (r *Router) sendJSON(w http.ResponseWriter, status int, v interface{}) {
 	// TODO: Maybe don't panic? This will encounter an error if the caller
 	// closes the response early.
 	w.Header().Set("content-type", "application/json; charset=utf-8")
@@ -307,7 +319,9 @@ func sendJSON(w http.ResponseWriter, status int, v interface{}) {
 	}
 
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
+	if !r.disableJSONIndent {
+		enc.SetIndent("", "  ")
+	}
 	if err := enc.Encode(v); err != nil {
 		panic(err)
 	}
