@@ -149,8 +149,8 @@ type Router struct {
 
 	router     *httprouter.Router
 	middleware []Middleware
-
-	parent *Router
+	options    []Option
+	parent     *Router
 }
 
 type Option func(*Router)
@@ -176,6 +176,7 @@ func NewRouter(options ...Option) *Router {
 	hr := httprouter.New()
 	r := &Router{router: hr}
 
+	r.options = options
 	for _, option := range options {
 		option(r)
 	}
@@ -196,13 +197,23 @@ func (r *Router) Use(ms ...Middleware) {
 
 // Group creates a new subrouter, representing a group of routes, from the given
 // Router. This subrouter may have its own middleware, but will also inherit its
-// parent's middleware.
-func (r *Router) Group() *Router {
-	return &Router{
+// parent's middleware. It will also inherit all the parent options which can
+// be overridden by passing new options.
+func (r *Router) Group(groupOptions ...Option) *Router {
+	newRouter := &Router{
 		parent:     r,
 		router:     r.router,
 		DumpErrors: r.DumpErrors,
+		options:    r.options,
 	}
+	for _, option := range r.options {
+		option(newRouter)
+	}
+	for _, option := range groupOptions {
+		option(newRouter)
+		newRouter.options = append(newRouter.options, option)
+	}
+	return newRouter
 }
 
 // RouteMap is a map of a method-path pair to an endpoint. For example:

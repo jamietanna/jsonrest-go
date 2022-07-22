@@ -307,6 +307,40 @@ func TestOptions(t *testing.T) {
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\n  \"message\": \"Hello World\"\n}\n")
 	})
+	t.Run("group with disabled pretty formatting", func(t *testing.T) {
+		r := jsonrest.NewRouter(jsonrest.WithDisableJSONIndent())
+		g := r.Group()
+		g.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": "Hello World"}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
+	})
+	t.Run("group with enabled pretty formatting", func(t *testing.T) {
+		r := jsonrest.NewRouter()
+		g := r.Group()
+		g.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": "Hello World"}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Body.String(), "{\n  \"message\": \"Hello World\"\n}\n")
+	})
+	t.Run("2nd level group with disabled pretty formatting", func(t *testing.T) {
+		r := jsonrest.NewRouter()
+		firstLevelGroup := r.Group(jsonrest.WithDisableJSONIndent())
+		g := firstLevelGroup.Group()
+		g.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": "Hello World"}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
+	})
 }
 
 type m map[string]interface{}
