@@ -12,7 +12,13 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/julienschmidt/httprouter"
+)
+
+const (
+	HeaderAcceptEncoding = "Accept-Encoding"
+	GzipEncoding         = "gzip"
 )
 
 // A Request represents a RESTful HTTP request received by the server.
@@ -120,17 +126,17 @@ type Endpoint func(ctx context.Context, r *Request) (interface{}, error)
 //
 // For example, you might create a logging middleware that looks like:
 //
-//     func LoggingMiddleware(logger *logger.Logger) Middleware {
-//         return func(next jsonrest.Endpoint) jsonrest.Endpoint {
-//             return func(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
-//                 start := time.Now()
-//                 defer func() {
-//                     log.Printf("%s (%v)", req.URL.Path, time.Since(start))
-//                 }()
-//                 return next(ctx, req)
-//             }
-//         }
-//    }
+//	 func LoggingMiddleware(logger *logger.Logger) Middleware {
+//	     return func(next jsonrest.Endpoint) jsonrest.Endpoint {
+//	         return func(ctx context.Context, req *jsonrest.Request) (interface{}, error) {
+//	             start := time.Now()
+//	             defer func() {
+//	                 log.Printf("%s (%v)", req.URL.Path, time.Since(start))
+//	             }()
+//	             return next(ctx, req)
+//	         }
+//	     }
+//	}
 type Middleware func(Endpoint) Endpoint
 
 // A Router is an http.Handler that routes incoming requests to registered
@@ -142,6 +148,12 @@ type Router struct {
 
 	// option to control JSON pretty formatting which can have performance impact
 	disableJSONIndent bool
+
+	// option to enable/disable gzip compression
+	enableCompression bool
+
+	// gzipHandler is a handler that wraps the router and compresses responses
+	gzipHandler func(http.Handler) http.Handler
 
 	// notFound is a configurable http.Handler which is called when no matching
 	// route is found. If it is not set, notFoundHandler is used.
@@ -168,6 +180,16 @@ func WithNotFoundHandler(h http.Handler) Option {
 func WithDisableJSONIndent() Option {
 	return func(r *Router) {
 		r.disableJSONIndent = true
+	}
+}
+
+// WithCompressionEnabled is an Option available for NewRouter to configure gzip compression.
+// The compression level can be gzip.DefaultCompression, gzip.NoCompression, gzip.HuffmanOnly
+// or any integer value between gzip.BestSpeed and gzip.BestCompression inclusive.
+func WithCompressionEnabled(level int) Option {
+	return func(r *Router) {
+		r.enableCompression = true
+		r.gzipHandler = gziphandler.MustNewGzipLevelHandler(level)
 	}
 }
 
@@ -218,12 +240,12 @@ func (r *Router) Group(groupOptions ...Option) *Router {
 
 // RouteMap is a map of a method-path pair to an endpoint. For example:
 //
-//     jsonrest.RouteMap{
-//         "GET  /ping": pingEndpoint,
-//         "HEAD /api/check": checkEndpoint,
-//         "POST /api/update": updateEndpoint,
-//         "PUT  /api/update": updateEndpoint,
-//     }
+//	jsonrest.RouteMap{
+//	    "GET  /ping": pingEndpoint,
+//	    "HEAD /api/check": checkEndpoint,
+//	    "POST /api/update": updateEndpoint,
+//	    "PUT  /api/update": updateEndpoint,
+//	}
 type RouteMap map[string]Endpoint
 
 // Routes registers all routes in the route map. It x panic if an entry is
@@ -263,7 +285,11 @@ func (r *Router) Handle(method, path string, endpoint Endpoint) {
 
 // ServeHTTP implements the http.Handler interface.
 func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
-	r.router.ServeHTTP(w, req)
+	var handler http.Handler = r.router
+	if r.enableCompression {
+		handler = r.gzipHandler(handler)
+	}
+	handler.ServeHTTP(w, req)
 }
 
 // applyMiddleware applies the routers's middleware to the provided endpoint.

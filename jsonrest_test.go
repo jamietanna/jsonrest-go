@@ -2,10 +2,13 @@ package jsonrest_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +16,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/NYTimes/gziphandler"
 	"github.com/deliveroo/assert-go"
+	"github.com/stretchr/testify/require"
+
 	"github.com/deliveroo/jsonrest-go"
 )
 
@@ -23,7 +29,7 @@ func TestSimpleGet(t *testing.T) {
 		return jsonrest.M{"message": "Hello World"}, nil
 	})
 
-	w := do(r, http.MethodGet, "/hello", nil, "application/json")
+	w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"message": "Hello World"})
 }
@@ -49,11 +55,11 @@ func TestCustomSuccessStatusCode(t *testing.T) {
 		}, nil
 	})
 
-	w := do(r, http.MethodGet, "/hello", nil, "application/json")
+	w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 	assert.Equal(t, w.Result().StatusCode, http.StatusNoContent)
 	assert.JSONEqual(t, w.Body.String(), "")
 
-	w = do(r, http.MethodGet, "/bye", nil, "application/json")
+	w = do(r, http.MethodGet, "/bye", nil, "application/json", nil)
 	assert.Equal(t, w.Result().StatusCode, http.StatusCreated)
 	assert.JSONEqual(t, w.Body.String(), `{"data":"byebye"}`)
 }
@@ -71,13 +77,13 @@ func TestRequestBody(t *testing.T) {
 	})
 
 	t.Run("good json", func(t *testing.T) {
-		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`), "application/json")
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": 1}`), "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{"id": 1})
 	})
 
 	t.Run("bad json", func(t *testing.T) {
-		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`), "application/json")
+		w := do(r, http.MethodPost, "/users", strings.NewReader(`{"id": |1}`), "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 400)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -109,7 +115,7 @@ func TestFormFile(t *testing.T) {
 		assert.Must(t, err)
 		mw.Close()
 
-		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType())
+		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType(), nil)
 		assert.Equal(t, r.Result().StatusCode, 200)
 		assert.JSONEqual(t, r.Body.String(), m{"fileName": "test"})
 	})
@@ -118,7 +124,7 @@ func TestFormFile(t *testing.T) {
 		buf := new(bytes.Buffer)
 		mw := multipart.NewWriter(buf)
 
-		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType())
+		r := do(r, http.MethodPost, "/file_upload", buf, mw.FormDataContentType(), nil)
 		assert.Equal(t, r.Result().StatusCode, 400)
 	})
 }
@@ -133,7 +139,7 @@ func TestRequestURLParams(t *testing.T) {
 		return jsonrest.M{"id": id}, nil
 	})
 
-	w := do(r, http.MethodGet, "/users/123", nil, "application/json")
+	w := do(r, http.MethodGet, "/users/123", nil, "application/json", nil)
 	assert.Equal(t, w.Result().StatusCode, 200)
 	assert.JSONEqual(t, w.Body.String(), m{"id": "123"})
 }
@@ -141,7 +147,7 @@ func TestRequestURLParams(t *testing.T) {
 func TestNotFound(t *testing.T) {
 	t.Run("no override", func(t *testing.T) {
 		r := jsonrest.NewRouter()
-		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
+		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 404)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"error": m{
@@ -158,7 +164,7 @@ func TestNotFound(t *testing.T) {
 			assert.Must(t, json.NewEncoder(w).Encode(m{"proxy": true}))
 		})
 		r := jsonrest.NewRouter(jsonrest.WithNotFoundHandler(h))
-		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json")
+		w := do(r, http.MethodGet, "/invalid_path", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.JSONEqual(t, w.Body.String(), m{
 			"proxy": true,
@@ -216,7 +222,7 @@ func TestError(t *testing.T) {
 				return nil, tt.err
 			})
 
-			w := do(r, http.MethodGet, "/fail", nil, "application/json")
+			w := do(r, http.MethodGet, "/fail", nil, "application/json", nil)
 			assert.Equal(t, w.Result().StatusCode, tt.wantStatus)
 			assert.JSONEqual(t, w.Body.String(), tt.want)
 		})
@@ -230,7 +236,7 @@ func TestDumpInternalError(t *testing.T) {
 		return nil, errors.New("foo error occurred")
 	})
 
-	w := do(r, http.MethodGet, "/", nil, "application/json")
+	w := do(r, http.MethodGet, "/", nil, "application/json", nil)
 	assert.Equal(t, w.Result().StatusCode, 500)
 	assert.JSONEqual(t, w.Body.String(), m{
 		"error": m{
@@ -255,7 +261,7 @@ func TestMiddleware(t *testing.T) {
 		})
 		r.Get("/test", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
-		w := do(r, http.MethodGet, "/test", nil, "application/json")
+		w := do(r, http.MethodGet, "/test", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 	})
@@ -275,12 +281,12 @@ func TestMiddleware(t *testing.T) {
 		withoutMiddleware := r.Group()
 		withoutMiddleware.Get("/withoutmiddleware", func(ctx context.Context, req *jsonrest.Request) (interface{}, error) { return nil, nil })
 
-		w := do(r, http.MethodGet, "/withmiddleware", nil, "application/json")
+		w := do(r, http.MethodGet, "/withmiddleware", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.True(t, called)
 
 		called = false
-		w = do(r, http.MethodGet, "/withoutmiddleware", nil, "application/json")
+		w = do(r, http.MethodGet, "/withoutmiddleware", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.False(t, called)
 	})
@@ -293,7 +299,7 @@ func TestOptions(t *testing.T) {
 			return jsonrest.M{"message": "Hello World"}, nil
 		})
 
-		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
 	})
@@ -303,7 +309,7 @@ func TestOptions(t *testing.T) {
 			return jsonrest.M{"message": "Hello World"}, nil
 		})
 
-		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\n  \"message\": \"Hello World\"\n}\n")
 	})
@@ -314,7 +320,7 @@ func TestOptions(t *testing.T) {
 			return jsonrest.M{"message": "Hello World"}, nil
 		})
 
-		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
 	})
@@ -325,7 +331,7 @@ func TestOptions(t *testing.T) {
 			return jsonrest.M{"message": "Hello World"}, nil
 		})
 
-		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\n  \"message\": \"Hello World\"\n}\n")
 	})
@@ -337,17 +343,61 @@ func TestOptions(t *testing.T) {
 			return jsonrest.M{"message": "Hello World"}, nil
 		})
 
-		w := do(r, http.MethodGet, "/hello", nil, "application/json")
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
 		assert.Equal(t, w.Result().StatusCode, 200)
 		assert.Equal(t, w.Body.String(), "{\"message\":\"Hello World\"}\n")
+	})
+
+	t.Run("the response should not be compressed if the proper accept header is not sent in the request", func(t *testing.T) {
+		msg := strings.Repeat("H", gziphandler.DefaultMinSize)
+		r := jsonrest.NewRouter(jsonrest.WithCompressionEnabled(gzip.DefaultCompression))
+		r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": msg}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", nil)
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Result().Header.Get("Content-Encoding"), "")
+		assert.Equal(t, w.Body.String(), fmt.Sprintf("{\n  \"message\": \"%s\"\n}\n", msg))
+	})
+	t.Run("the response should not be compressed if compression is disabled", func(t *testing.T) {
+		msg := strings.Repeat("H", gziphandler.DefaultMinSize)
+		r := jsonrest.NewRouter()
+		r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": msg}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", map[string]string{"Accept-Encoding": "gzip"})
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Result().Header.Get("Content-Encoding"), "")
+		assert.Equal(t, w.Body.String(), fmt.Sprintf("{\n  \"message\": \"%s\"\n}\n", msg))
+	})
+	t.Run("the response should be compressed", func(t *testing.T) {
+		msg := strings.Repeat("H", gziphandler.DefaultMinSize)
+		r := jsonrest.NewRouter(jsonrest.WithCompressionEnabled(gzip.DefaultCompression))
+		r.Get("/hello", func(ctx context.Context, r *jsonrest.Request) (interface{}, error) {
+			return jsonrest.M{"message": strings.Repeat("H", gziphandler.DefaultMinSize)}, nil
+		})
+
+		w := do(r, http.MethodGet, "/hello", nil, "application/json", map[string]string{"Accept-Encoding": "gzip"})
+		assert.Equal(t, w.Result().StatusCode, 200)
+		assert.Equal(t, w.Result().Header.Get("Content-Encoding"), "gzip")
+		gzipReader, err := gzip.NewReader(w.Body)
+		require.NoError(t, err)
+		body, err := ioutil.ReadAll(gzipReader)
+		require.NoError(t, err)
+		assert.Equal(t, string(body), fmt.Sprintf("{\n  \"message\": \"%s\"\n}\n", msg))
 	})
 }
 
 type m map[string]interface{}
 
-func do(h http.Handler, method, path string, body io.Reader, contentType string) *httptest.ResponseRecorder {
+func do(h http.Handler, method, path string, body io.Reader, contentType string, headers map[string]string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(method, path, body)
 	req.Header.Set("Content-Type", contentType)
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 	return w
